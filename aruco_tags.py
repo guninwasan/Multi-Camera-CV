@@ -61,6 +61,29 @@ class RoverDetector:
                     # Optionally, draw a circle in the center of the ArUco marker
                     cv2.circle(frame, (x_center, y_center), 5, (0, 255, 0), -1)
 
+            # Edge detection to find walls
+            edges = cv2.Canny(gray, 50, 150)
+
+            # Check for collision
+            if ids is not None:
+                for i, corner in enumerate(corners):
+                    c = corner[0]
+                    x_center = int(c[:, 0].mean())
+                    y_center = int(c[:, 1].mean())
+                    if edges[y_center, x_center] > 0:
+                        print(
+                            f"Collision detected for ArUco Marker ID {ids[i][0]} at position: ({x_center}, {y_center})"
+                        )
+                        cv2.putText(
+                            frame,
+                            "Collision Detected",
+                            (x_center, y_center - 10),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.9,
+                            (0, 0, 255),
+                            2,
+                        )
+
             # Show the result frame
             cv2.imshow("Rover Detection", frame)
 
