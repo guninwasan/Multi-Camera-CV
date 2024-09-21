@@ -5,29 +5,9 @@ import numpy as np
 class RoverDetector:
     def __init__(self, aruco_dict_type=cv2.aruco.DICT_6X6_250, camera_index=0):
         # Load the specified ArUco dictionary
-        self.generate_constant_aruco_marker(
-            42, 400, cv2.aruco.DICT_6X6_250, "constant_aruco_marker.png"
-        )
         self.aruco_dict = cv2.aruco.getPredefinedDictionary(aruco_dict_type)
         self.aruco_params = cv2.aruco.DetectorParameters()
         self.cap = cv2.VideoCapture(camera_index)  # Open video capture
-
-    def generate_constant_aruco_marker(
-        self,
-        marker_id=42,
-        marker_size=400,
-        aruco_dict_type=cv2.aruco.DICT_6X6_250,
-        output_file="constant_aruco_marker.png",
-    ):
-        # Load the predefined dictionary
-        aruco_dict = cv2.aruco.getPredefinedDictionary(aruco_dict_type)
-
-        # Generate the constant marker image
-        marker_image = cv2.aruco.generateImageMarker(aruco_dict, marker_id, marker_size)
-
-        # Save the constant marker image to a file
-        cv2.imwrite(output_file, marker_image)
-        print(f"Constant ArUco marker with ID {marker_id} saved as '{output_file}'.")
 
     def detect_rover(self):
         while True:
