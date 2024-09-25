@@ -62,6 +62,11 @@ class CombinedCVModel:
                         (0, 255, 255),  # Brighter color (yellow)
                         2,
                     )
+            else:
+                # Use optical flow as a fail-proof measure
+                flow_bgr = self.optical_flow.calculate_flow(frame)
+                alpha = 0.5  # Transparency factor
+                frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             edges = cv2.Canny(gray, 50, 150)
@@ -81,9 +86,6 @@ class CombinedCVModel:
                             (0, 0, 255),
                             2,
                         )
-
-            flow_bgr = self.optical_flow.calculate_flow(frame)
-            cv2.imshow("Optical Flow", flow_bgr)
 
             results = self.yolo_detector.detect_objects(frame)
             for result in results.xyxy[0]:
