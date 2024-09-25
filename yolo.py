@@ -15,5 +15,8 @@ class YoloDetector:
 
     def detect_objects(self, frame):
         results = self.model(frame)  # Run inference on the frame
+        # Filter results to keep only 'person' class (assuming class ID 0 is 'person')
+        person_results = results.xyxy[0][results.xyxy[0][:, -1] == 0]
+        results.xyxy[0] = person_results
         results.render()  # Updates the frame with bounding boxes and labels
         return results
