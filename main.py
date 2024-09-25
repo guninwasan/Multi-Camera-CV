@@ -22,6 +22,11 @@ class CombinedCVModel:
 
     def detect_and_track(self):
         self.start_time = time.time()
+        cv2.namedWindow("Combined CV Model", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty(
+            "Combined CV Model", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN
+        )
+
         while True:
             ret, frame = self.cap.read()
             if not ret:
@@ -41,7 +46,20 @@ class CombinedCVModel:
                         (x_center + 10, y_center),
                         cv2.FONT_HERSHEY_SIMPLEX,
                         0.9,
-                        (0, 255, 0),
+                        (0, 255, 255),  # Brighter color (yellow)
+                        2,
+                    )
+                    # Add commentary text
+                    commentary_text = (
+                        f"ArUco Marker ID {ids[i][0]} at ({x_center}, {y_center})"
+                    )
+                    cv2.putText(
+                        frame,
+                        commentary_text,
+                        (10, 30 + 30 * i),  # Position the text below each other
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.7,
+                        (0, 255, 255),  # Brighter color (yellow)
                         2,
                     )
 
