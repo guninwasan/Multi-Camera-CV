@@ -62,14 +62,12 @@ class CombinedCVModel:
                         (0, 255, 255),  # Brighter color (yellow)
                         2,
                     )
-            else:
-                # Use optical flow as a fail-proof measure
-                flow_bgr = self.optical_flow.calculate_flow(frame)
-                alpha = 0.5  # Transparency factor
-                frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
 
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             edges = cv2.Canny(gray, 50, 150)
+
+            # Mark detected edges (walls) on the frame
+            frame[edges != 0] = [0, 0, 255]  # Mark edges in red
 
             if ids is not None:
                 for i, corner in enumerate(corners):
@@ -86,6 +84,36 @@ class CombinedCVModel:
                             (0, 0, 255),
                             2,
                         )
+
+            # Check for collision with the wall using edge detection
+            frame_height, frame_width = frame.shape[:2]
+            collision_detected = False
+            if ids is not None:
+                for i, corner in enumerate(corners):
+                    c = corner[0]
+                    x_center = int(c[:, 0].mean())
+                    y_center = int(c[:, 1].mean())
+                    if edges[y_center, x_center] > 0:
+                        collision_detected = True
+                        print(
+                            f"Collision detected at position: ({x_center}, {y_center})"
+                        )
+                        cv2.putText(
+                            frame,
+                            "Wall Collision Detected",
+                            (x_center, y_center - 30),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            0.9,
+                            (0, 0, 255),
+                            2,
+                        )
+                        break
+
+            if not collision_detected and ids is None:
+                # Use optical flow as a fail-proof measure
+                flow_bgr = self.optical_flow.calculate_flow(frame)
+                alpha = 0.5  # Transparency factor
+                frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
 
             results = self.yolo_detector.detect_objects(frame)
             for result in results.xyxy[0]:
@@ -104,7 +132,8 @@ class CombinedCVModel:
 
 if __name__ == "__main__":
     try:
-        model = CombinedCVModel()
+        video_source = "/Users/guninwasan/Downloads/CV-System/Screen Recording 2024-09-25 at 18.59.51.mov"
+        model = CombinedCVModel(video_source)
         model.detect_and_track()
     except Exception as e:
         print(f"An error occurred: {e}")
