@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Robot Collision Detection System</title>
+    <link rel="stylesheet" href="static/css/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="text-center">Robot Collision Detection System</h1>
+      <div class="row">
+        <div class="col-md-4">
+          <div class="scorecard">
+            <h3>Scorecard</h3>
+            <form id="team-form">
+              <div class="form-group">
+                <label for="team-name">Team Name/Number:</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="team-name"
+                  name="team_name"
+                  required
+                />
+              </div>
+              <button type="submit" class="btn btn-primary">Update Team</button>
+            </form>
+            <hr />
+            <div>
+              <p>
+                <strong>Elapsed Time:</strong>
+                <span id="elapsed-time">0.00 s</span>
+              </p>
+              <p>
+                <strong>Human Interventions:</strong>
+                <span id="human-interventions">0</span>
+              </p>
+            </div>
+            <button id="start-stop-button" class="btn btn-success">
+              Start Timer
+            </button>
+            <button id="reset-button" class="btn btn-warning">Reset</button>
+          </div>
+        </div>
+        <div class="col-md-8">
+          <div class="video-container">
+            <img id="video-feed" src="/video_feed" alt="Video Feed" />
+            <button class="fullscreen-btn" onclick="toggleFullscreen()">
+              Fullscreen
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script src="static/js/scripts.js"></script>
+  </body>
+</html>
