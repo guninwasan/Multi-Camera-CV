@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Robot Collision Detection System</title>
+    <link rel="stylesheet" href="static/css/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1 class="text-center">Robot Collision Detection System</h1>
+      <div class="row">
+        <div class="col-md-4">
+          <div class="scorecard">
+            <h3>Scorecard</h3>
+            <form id="team-form">
+              <div class="form-group">
+                <label for="team-name">Team Name/Number:</label>
+                <input
+                  type="text"
+                  class="form-control"
+                  id="team-name"
+                  name="team_name"
+                  required
+                />
+              </div>
+              <button
+                type="button"
+                id="update-team-button"
+                class="btn btn-primary"
+              >
+                Update Team
+              </button>
+            </form>
+            <hr />
+            <div>
+              <p>
+                <strong>Elapsed Time:</strong>
+                <span id="elapsed-time">0.00 s</span>
+              </p>
+              <p>
+                <strong>Human Interventions:</strong>
+                <span id="human-interventions">0</span>
+              </p>
+            </div>
+            <button id="start-stop-button" class="btn btn-success" disabled>
+              Start Timer
+            </button>
+            <button id="reset-button" class="btn btn-warning" disabled>
+              Reset
+            </button>
+          </div>
+        </div>
+        <div class="col-md-8">
+          <div class="video-container">
+            <img id="video-feed" src="/video_feed" alt="Video Feed" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        let timerRunning = false;
+        let teamName = "";
+        let startTime = null;
+
+        // Update team name and enable start button
+        document
+          .getElementById("update-team-button")
+          .addEventListener("click", function () {
+            teamName = document.getElementById("team-name").value;
+            if (teamName) {
+              document.getElementById("start-stop-button").disabled = false;
+              alert("Team updated successfully");
+            } else {
+              alert("Please enter a valid team name");
+            }
+          });
+
+        // Start or Stop timer
+        document
+          .getElementById("start-stop-button")
+          .addEventListener("click", function () {
+            if (!timerRunning) {
+              startSystem();
+            } else {
+              stopSystem();
+            }
+          });
+
+        // Reset system
+        document
+          .getElementById("reset-button")
+          .addEventListener("click", function () {
+            resetSystem();
+          });
+
+        function startSystem() {
+          fetch("/start_system", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "team_name=" + encodeURIComponent(teamName),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.status === "success") {
+                timerRunning = true;
+                startTime = Date.now();
+                document.getElementById("start-stop-button").textContent =
+                  "Stop Timer";
+                document.getElementById("reset-button").disabled = true;
+                updateElapsedTime();
+              }
+            });
+        }
+
+        function stopSystem() {
+          fetch("/stop_system", { method: "POST" })
+            .then((response) => response.json())
+            .then((data) => {
+              alert(`Team: ${data.team}, Time Taken: ${data.time_taken}`);
+              timerRunning = false;
+              document.getElementById("start-stop-button").textContent =
+                "Start Timer";
+              document.getElementById("reset-button").disabled = false;
+              clearInterval(elapsedTimeInterval);
+            });
+        }
+
+        function resetSystem() {
+          fetch("/reset_system", { method: "POST" })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.status === "reset") {
+                teamName = "";
+                timerRunning = false;
+                startTime = null;
+                document.getElementById("team-name").value = "";
+                document.getElementById("start-stop-button").disabled = true;
+                document.getElementById("reset-button").disabled = true;
+                document.getElementById("elapsed-time").textContent = "0.00 s";
+              }
+            });
+        }
+
+        let elapsedTimeInterval;
+        function updateElapsedTime() {
+          elapsedTimeInterval = setInterval(function () {
+            if (startTime) {
+              const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+              document.getElementById(
+                "elapsed-time"
+              ).textContent = `${elapsedTime} s`;
+            }
+          }, 100);
+        }
+      });
+    </script>
+  </body>
+</html>

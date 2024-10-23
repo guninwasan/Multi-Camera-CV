@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Team Input</title>
+    <link rel="stylesheet" href="static/css/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Enter Team Name</h1>
+      <form id="team-form" action="/start_timer_page" method="POST">
+        <div class="form-group">
+          <label for="team-name">Team Name/Number:</label>
+          <input
+            type="text"
+            class="form-control"
+            id="team-name"
+            name="team_name"
+            required
+          />
+        </div>
+        <button type="submit" class="btn btn-primary">Proceed</button>
+      </form>
+    </div>
+  </body>
+</html>
