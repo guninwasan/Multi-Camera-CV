@@ -6,19 +6,17 @@ import threading
 import numpy as np
 from aruco import ArucoDetector
 from moving_object import OpticalFlow
-from yolo import YoloDetector
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 
 # Global variables
 cap = cv2.VideoCapture(
-    "/Users/guninwasan/Downloads/CV-System/Screen Recording 2024-09-25 at 18.59.51.mov"
-)  # Change this to your video source if needed
+    "/Users/guninwasan/Downloads/CV-System/vid.mp4"
+)  # Update video source
 start_time = None
 timer_running = False
-human_interventions = 0
+robot_positions = []  # Store robot positions to calculate average speed
 team_name = "Team"
-cv_only_mode = True
 
 # Lock for thread-safe operations
 lock = threading.Lock()
@@ -26,31 +24,83 @@ lock = threading.Lock()
 # Initialize detectors
 aruco_detector = ArucoDetector()
 optical_flow = OpticalFlow()
-yolo_detector = YoloDetector()
 
 
-# Function to detect walls using advanced edge detection
-def detect_walls(frame):
-    # Create a copy of the frame for edge detection
-    edge_frame = frame.copy()
-
-    # Convert to grayscale
-    gray = cv2.cvtColor(edge_frame, cv2.COLOR_BGR2GRAY)
-
-    blurred = cv2.GaussianBlur(gray, (7, 7), 0)
-    edges = cv2.Canny(blurred, 75, 200)
-
-    # Dilate the edges to make them thicker
-    kernel = np.ones((3, 3), np.uint8)
-    dilated_edges = cv2.dilate(edges, kernel, iterations=1)
-
-    # Overlay the detected edges on the original frame
-    frame[dilated_edges != 0] = [255, 0, 0]  # Blue color for walls
-    return dilated_edges
+# Function to calculate distance between two points
+def calculate_distance(p1, p2):
+    return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
+# Function to detect the robot and calculate position and speed
+def detect_robot(frame):
+    global robot_positions
+
+    # Attempt to detect ArUco marker
+    corners, ids = aruco_detector.detect_markers(frame)
+
+    if ids is not None:
+        # If ArUco markers are found, use the center of the marker as the robot's position
+        c = corners[0][0]  # Assume we're tracking one robot
+        x_center = int(c[:, 0].mean())
+        y_center = int(c[:, 1].mean())
+        current_position = (x_center, y_center)
+
+        # Display robot position on frame
+        cv2.circle(frame, current_position, 5, (0, 255, 0), -1)
+        cv2.putText(
+            frame,
+            f"Position: ({x_center}, {y_center})",
+            (x_center + 10, y_center),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.9,
+            (0, 255, 255),
+            2,
+        )
+    else:
+        # If no ArUco marker is detected, fall back to optical flow
+        flow_bgr = optical_flow.calculate_flow(frame)
+        alpha = 0.5  # Transparency factor
+        frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
+
+        if robot_positions:
+            current_position = robot_positions[-1]  # Use last known position
+        else:
+            current_position = (0, 0)  # Default position if no prior data
+
+    # Append current position to the list for speed calculation
+    robot_positions.append((current_position, time.time()))
+
+    return frame, current_position
+
+
+# Function to calculate average speed
+def calculate_average_speed():
+    if len(robot_positions) < 2:
+        return 0.0
+
+    total_distance = 0.0
+    total_time = 0.0
+
+    for i in range(1, len(robot_positions)):
+        p1, t1 = robot_positions[i - 1]
+        p2, t2 = robot_positions[i]
+        distance = calculate_distance(p1, p2)
+        time_diff = t2 - t1
+
+        total_distance += distance
+        total_time += time_diff
+
+    # Avoid division by zero
+    if total_time == 0:
+        return 0.0
+
+    average_speed = total_distance / total_time
+    return average_speed
+
+
+# Function to generate frames
 def generate_frames():
-    global start_time, timer_running, human_interventions, cv_only_mode
+    global start_time, timer_running, robot_positions
 
     while True:
         success, frame = cap.read()
@@ -58,35 +108,8 @@ def generate_frames():
             break
 
         with lock:
-            # Detect walls with advanced edge detection
-            wall_edges = detect_walls(frame)
-
-            # ArUco tag detection for the rover
-            corners, ids = aruco_detector.detect_markers(frame)
-
-            # If ArUco markers are found
-            if ids is not None:
-                for i, corner in enumerate(corners):
-                    c = corner[0]
-                    x_center = int(c[:, 0].mean())
-                    y_center = int(c[:, 1].mean())
-                    cv2.circle(frame, (x_center, y_center), 5, (0, 255, 0), -1)
-                    cv2.putText(
-                        frame,
-                        f"ID: {ids[i][0]}",
-                        (x_center + 10, y_center),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.9,
-                        (0, 255, 255),  # Brighter color (yellow)
-                        2,
-                    )
-
-            # YOLO detection (for detecting human interventions)
-            results = yolo_detector.detect_objects(frame)
-            for result in results.xyxy[0]:
-                if result[-1] == 0:  # Assuming class 0 is 'person'
-                    human_interventions += 1
-                    break
+            # Detect robot and get position
+            frame, current_position = detect_robot(frame)
 
             # Timer display
             if timer_running and start_time is not None:
@@ -102,14 +125,22 @@ def generate_frames():
                     2,
                 )
 
-        if cv_only_mode:
-            cv2.imshow("CV Only Mode", frame)
-            if cv2.waitKey(1) & 0xFF == ord("q"):
-                break
-        else:
-            ret, buffer = cv2.imencode(".jpg", frame)
-            frame = buffer.tobytes()
-            yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+            # Display average speed
+            average_speed = calculate_average_speed()
+            cv2.putText(
+                frame,
+                f"Avg Speed: {average_speed:.2f} px/s",
+                (20, 100),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                1,
+                (255, 255, 255),
+                2,
+            )
+
+        # Encode frame for streaming
+        ret, buffer = cv2.imencode(".jpg", frame)
+        frame = buffer.tobytes()
+        yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
 
 @app.route("/")
@@ -139,113 +170,19 @@ def start_stop_timer():
 
 @app.route("/reset", methods=["POST"])
 def reset():
-    global start_time, timer_running, human_interventions
+    global start_time, timer_running, robot_positions
     with lock:
         start_time = None
         timer_running = False
-        human_interventions = 0
+        robot_positions = []  # Reset positions
     return jsonify(status="success")
-
-
-@app.route("/update_team", methods=["POST"])
-def update_team():
-    global team_name
-    team_name = request.form["team_name"]
-    return jsonify(status="success")
-
-
-@app.route("/scorecard")
-def scorecard():
-    global start_time, timer_running, human_interventions
-    elapsed_time = 0.00
-    if timer_running and start_time is not None:
-        elapsed_time = time.time() - start_time
-    return jsonify(
-        elapsed_time=f"{elapsed_time:.2f} s", human_interventions=human_interventions
-    )
-
-
-@app.route("/cv_only", methods=["POST"])
-def cv_only():
-    global cv_only_mode
-    with lock:
-        cv_only_mode = True
-    return jsonify(status="success")
-
-
-def run_cv_only_mode():
-    while True:
-        success, frame = cap.read()
-        if not success:
-            break
-
-        # Detect walls with advanced edge detection
-        wall_edges = detect_walls(frame)
-
-        # ArUco tag detection for the rover
-        corners, ids = aruco_detector.detect_markers(frame)
-
-        # If ArUco markers are found
-        if ids is not None:
-            for i, corner in enumerate(corners):
-                c = corner[0]
-                x_center = int(c[:, 0].mean())
-                y_center = int(c[:, 1].mean())
-                cv2.circle(frame, (x_center, y_center), 5, (0, 255, 0), -1)
-                cv2.putText(
-                    frame,
-                    f"ID: {ids[i][0]}",
-                    (x_center + 10, y_center),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.9,
-                    (0, 255, 255),  # Brighter color (yellow)
-                    2,
-                )
-
-        if ids is None:
-            # Use optical flow as a fallback when no ArUco marker is detected
-            flow_bgr = optical_flow.calculate_flow(frame)
-            alpha = 0.5  # Transparency factor
-            frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
-
-        # YOLO detection (for detecting human interventions)
-        results = yolo_detector.detect_objects(frame)
-        for result in results.xyxy[0]:
-            if result[-1] == 0:  # Assuming class 0 is 'person'
-                cv2.putText(
-                    frame,
-                    "Human Intervention Detected",
-                    (50, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (0, 0, 255),
-                    2,
-                )
-                break
-
-        # Display the frame
-        cv2.imshow("CV Only Mode", frame)
-        if cv2.waitKey(1) & 0xFF == ord("q"):
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Run the application in Flask or CV-only mode."
-    )
-    parser.add_argument(
-        "--cv-only", action="store_true", help="Run in CV-only mode without Flask."
-    )
+    parser = argparse.ArgumentParser(description="Run the application.")
     args = parser.parse_args()
 
-    if args.cv_only or cv_only_mode:
-        run_cv_only_mode()
-    else:
-        try:
-            app.run(debug=True)
-        except Exception as e:
-            print(f"Failed to start Flask server: {e}")
-            run_cv_only_mode()
+    try:
+        app.run(debug=True, threaded=True)  # Run in threaded mode for performance
+    except Exception as e:
+        print(f"Failed to start Flask server: {e}")
