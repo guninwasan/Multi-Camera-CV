@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timer and CV System</title>
+    <link rel="stylesheet" href="static/css/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h1>Team: {{ team_name }}</h1>
+      <div>
+        <p>
+          <strong>Elapsed Time:</strong>
+          <span id="elapsed-time">0.00 s</span>
+        </p>
+        <button id="start-stop-button" class="btn btn-success">
+          Start Timer
+        </button>
+      </div>
+      <div class="video-container">
+        <img id="video-feed" src="/video_feed" alt="Video Feed" />
+      </div>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        let timerRunning = false;
+        let startTime = null;
+
+        // Start/Stop timer
+        document
+          .getElementById("start-stop-button")
+          .addEventListener("click", function () {
+            if (!timerRunning) {
+              startSystem();
+            } else {
+              stopSystem();
+            }
+          });
+
+        // Start system
+        function startSystem() {
+          fetch("/start_system", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.status === "success") {
+                timerRunning = true;
+                startTime = Date.now();
+                document.getElementById("start-stop-button").textContent =
+                  "Stop Timer";
+                document.getElementById("video-feed").style.display = "block";
+                updateElapsedTime();
+              }
+            });
+        }
+
+        // Stop system and redirect to the team input page
+        function stopSystem() {
+          fetch("/stop_system", { method: "POST" })
+            .then((response) => response.json())
+            .then((data) => {
+              alert(`Time Taken: ${data.time_taken}`);
+              timerRunning = false;
+              document.getElementById("start-stop-button").textContent =
+                "Start Timer";
+              document.getElementById("video-feed").style.display = "none";
+              clearInterval(elapsedTimeInterval);
+
+              // Redirect to the team input page
+              window.location.href = "/";
+            });
+        }
+
+        let elapsedTimeInterval;
+        function updateElapsedTime() {
+          elapsedTimeInterval = setInterval(function () {
+            if (startTime) {
+              const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+              document.getElementById(
+                "elapsed-time"
+              ).textContent = `${elapsedTime} s`;
+            }
+          }, 100);
+        }
+      });
+    </script>
+  </body>
+</html>

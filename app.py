@@ -1,29 +1,23 @@
-import argparse
-from flask import Flask, render_template, Response, request, jsonify
 import cv2
+from flask import Flask, render_template, request, jsonify, Response
 import time
 import threading
 import numpy as np
 from aruco import ArucoDetector
 from moving_object import OpticalFlow
 
-app = Flask(__name__, static_folder="static", template_folder="templates")
+app = Flask(__name__)
 
 # Global variables
-cap = cv2.VideoCapture(
-    "/Users/guninwasan/Downloads/CV-System/vid.mp4"
-)  # Update video source
-start_time = None
+cap = cv2.VideoCapture(0)
+team_name = None
 timer_running = False
-robot_positions = []  # Store robot positions to calculate average speed
-team_name = "Team"
-
-# Lock for thread-safe operations
+start_time = None
 lock = threading.Lock()
 
-# Initialize detectors
 aruco_detector = ArucoDetector()
 optical_flow = OpticalFlow()
+robot_positions = []  # Store robot positions
 
 
 # Function to calculate distance between two points
@@ -31,21 +25,18 @@ def calculate_distance(p1, p2):
     return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
-# Function to detect the robot and calculate position and speed
+# Function to detect the robot
 def detect_robot(frame):
     global robot_positions
 
-    # Attempt to detect ArUco marker
     corners, ids = aruco_detector.detect_markers(frame)
-
     if ids is not None:
-        # If ArUco markers are found, use the center of the marker as the robot's position
-        c = corners[0][0]  # Assume we're tracking one robot
+        c = corners[0][0]
         x_center = int(c[:, 0].mean())
         y_center = int(c[:, 1].mean())
         current_position = (x_center, y_center)
 
-        # Display robot position on frame
+        # Draw circle and display position
         cv2.circle(frame, current_position, 5, (0, 255, 0), -1)
         cv2.putText(
             frame,
@@ -57,95 +48,58 @@ def detect_robot(frame):
             2,
         )
     else:
-        # If no ArUco marker is detected, fall back to optical flow
+        # Optical flow when no marker is detected
         flow_bgr = optical_flow.calculate_flow(frame)
         alpha = 0.5  # Transparency factor
         frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
+        current_position = robot_positions[-1] if robot_positions else (0, 0)
 
-        if robot_positions:
-            current_position = robot_positions[-1]  # Use last known position
-        else:
-            current_position = (0, 0)  # Default position if no prior data
-
-    # Append current position to the list for speed calculation
     robot_positions.append((current_position, time.time()))
-
-    return frame, current_position
-
-
-# Function to calculate average speed
-def calculate_average_speed():
-    if len(robot_positions) < 2:
-        return 0.0
-
-    total_distance = 0.0
-    total_time = 0.0
-
-    for i in range(1, len(robot_positions)):
-        p1, t1 = robot_positions[i - 1]
-        p2, t2 = robot_positions[i]
-        distance = calculate_distance(p1, p2)
-        time_diff = t2 - t1
-
-        total_distance += distance
-        total_time += time_diff
-
-    # Avoid division by zero
-    if total_time == 0:
-        return 0.0
-
-    average_speed = total_distance / total_time
-    return average_speed
+    return frame
 
 
-# Function to generate frames
+# Function to generate frames for video streaming
 def generate_frames():
-    global start_time, timer_running, robot_positions
-
     while True:
         success, frame = cap.read()
         if not success:
             break
 
-        with lock:
-            # Detect robot and get position
-            frame, current_position = detect_robot(frame)
+        frame = detect_robot(frame)
 
-            # Timer display
-            if timer_running and start_time is not None:
-                elapsed_time = time.time() - start_time
-                cv2.rectangle(frame, (10, 10, 300, 60), (0, 0, 0), -1)
-                cv2.putText(
-                    frame,
-                    f"Elapsed Time: {elapsed_time:.2f} s",
-                    (20, 50),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    1,
-                    (255, 255, 255),
-                    2,
-                )
-
-            # Display average speed
-            average_speed = calculate_average_speed()
-            cv2.putText(
-                frame,
-                f"Avg Speed: {average_speed:.2f} px/s",
-                (20, 100),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                1,
-                (255, 255, 255),
-                2,
-            )
-
-        # Encode frame for streaming
+        # Encode frame
         ret, buffer = cv2.imencode(".jpg", frame)
         frame = buffer.tobytes()
+
         yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
 
 @app.route("/")
-def index():
-    return render_template("index.html")
+def team_input():
+    return render_template("team_input.html")
+
+
+@app.route("/start_timer_page", methods=["POST"])
+def start_timer_page():
+    global team_name
+    team_name = request.form.get("team_name")
+    return render_template("timer.html", team_name=team_name)
+
+
+@app.route("/start_system", methods=["POST"])
+def start_system():
+    global start_time, timer_running
+    start_time = time.time()
+    timer_running = True
+    return jsonify(status="success")
+
+
+@app.route("/stop_system", methods=["POST"])
+def stop_system():
+    global timer_running, start_time
+    timer_running = False
+    elapsed_time = time.time() - start_time if start_time else 0.0
+    return jsonify(status="stopped", time_taken=f"{elapsed_time:.2f} seconds")
 
 
 @app.route("/video_feed")
@@ -155,34 +109,5 @@ def video_feed():
     )
 
 
-@app.route("/start_stop_timer", methods=["POST"])
-def start_stop_timer():
-    global start_time, timer_running
-    with lock:
-        if timer_running:
-            timer_running = False
-        else:
-            timer_running = True
-            if start_time is None:
-                start_time = time.time()
-    return jsonify(status="success")
-
-
-@app.route("/reset", methods=["POST"])
-def reset():
-    global start_time, timer_running, robot_positions
-    with lock:
-        start_time = None
-        timer_running = False
-        robot_positions = []  # Reset positions
-    return jsonify(status="success")
-
-
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Run the application.")
-    args = parser.parse_args()
-
-    try:
-        app.run(debug=True, threaded=True)  # Run in threaded mode for performance
-    except Exception as e:
-        print(f"Failed to start Flask server: {e}")
+    app.run(debug=True)

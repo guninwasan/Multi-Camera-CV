@@ -24,7 +24,13 @@
                   required
                 />
               </div>
-              <button type="submit" class="btn btn-primary">Update Team</button>
+              <button
+                type="button"
+                id="update-team-button"
+                class="btn btn-primary"
+              >
+                Update Team
+              </button>
             </form>
             <hr />
             <div>
@@ -37,10 +43,12 @@
                 <span id="human-interventions">0</span>
               </p>
             </div>
-            <button id="start-stop-button" class="btn btn-success">
+            <button id="start-stop-button" class="btn btn-success" disabled>
               Start Timer
             </button>
-            <button id="reset-button" class="btn btn-warning">Reset</button>
+            <button id="reset-button" class="btn btn-warning" disabled>
+              Reset
+            </button>
           </div>
         </div>
         <div class="col-md-8">
@@ -50,6 +58,103 @@
         </div>
       </div>
     </div>
-    <script src="static/js/scripts.js"></script>
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        let timerRunning = false;
+        let teamName = "";
+        let startTime = null;
+
+        // Update team name and enable start button
+        document
+          .getElementById("update-team-button")
+          .addEventListener("click", function () {
+            teamName = document.getElementById("team-name").value;
+            if (teamName) {
+              document.getElementById("start-stop-button").disabled = false;
+              alert("Team updated successfully");
+            } else {
+              alert("Please enter a valid team name");
+            }
+          });
+
+        // Start or Stop timer
+        document
+          .getElementById("start-stop-button")
+          .addEventListener("click", function () {
+            if (!timerRunning) {
+              startSystem();
+            } else {
+              stopSystem();
+            }
+          });
+
+        // Reset system
+        document
+          .getElementById("reset-button")
+          .addEventListener("click", function () {
+            resetSystem();
+          });
+
+        function startSystem() {
+          fetch("/start_system", {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: "team_name=" + encodeURIComponent(teamName),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.status === "success") {
+                timerRunning = true;
+                startTime = Date.now();
+                document.getElementById("start-stop-button").textContent =
+                  "Stop Timer";
+                document.getElementById("reset-button").disabled = true;
+                updateElapsedTime();
+              }
+            });
+        }
+
+        function stopSystem() {
+          fetch("/stop_system", { method: "POST" })
+            .then((response) => response.json())
+            .then((data) => {
+              alert(`Team: ${data.team}, Time Taken: ${data.time_taken}`);
+              timerRunning = false;
+              document.getElementById("start-stop-button").textContent =
+                "Start Timer";
+              document.getElementById("reset-button").disabled = false;
+              clearInterval(elapsedTimeInterval);
+            });
+        }
+
+        function resetSystem() {
+          fetch("/reset_system", { method: "POST" })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.status === "reset") {
+                teamName = "";
+                timerRunning = false;
+                startTime = null;
+                document.getElementById("team-name").value = "";
+                document.getElementById("start-stop-button").disabled = true;
+                document.getElementById("reset-button").disabled = true;
+                document.getElementById("elapsed-time").textContent = "0.00 s";
+              }
+            });
+        }
+
+        let elapsedTimeInterval;
+        function updateElapsedTime() {
+          elapsedTimeInterval = setInterval(function () {
+            if (startTime) {
+              const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+              document.getElementById(
+                "elapsed-time"
+              ).textContent = `${elapsedTime} s`;
+            }
+          }, 100);
+        }
+      });
+    </script>
   </body>
 </html>
