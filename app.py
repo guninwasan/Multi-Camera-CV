@@ -124,12 +124,13 @@ def resize_frame(frame, width, height):
 # Function to save the team report
 def save_team_report(team_name, time_taken, distance_covered, avg_speed):
     report_file = os.path.join(report_directory, f"{team_name}.txt")
-    with open(report_file, "w") as report:
+    with open(report_file, "a") as report:
         report.write(f"Team Name: {team_name}\n")
         report.write(f"Time Taken: {time_taken:.2f} seconds\n")
         report.write(f"Distance Covered: {distance_covered:.2f} meters\n")
         report.write(f"Average Speed: {avg_speed:.2f} m/s\n")
         report.write(f"Report generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+        report.write("\n\n")
 
 
 # Route to get team input
