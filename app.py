@@ -17,25 +17,44 @@ start_time = None
 lock = threading.Lock()
 recording = False  # To track recording status
 out = None  # VideoWriter object
+distance_covered = 0  # Distance in meters
+prev_position = None  # Previous robot position
+pixel_to_meter_ratio = 0.01  # Example ratio: 1 pixel = 0.01 meters (You need to calibrate this for your system)
 
 aruco_detector = ArucoDetector()
 optical_flow = OpticalFlow()
 robot_positions = []  # Store robot positions
 
-# Directory to store videos
+# Directory to store videos and reports
 video_save_directory = os.path.join(os.getcwd(), "videos")
+report_directory = os.path.join(os.getcwd(), "reports")
 if not os.path.exists(video_save_directory):
     os.makedirs(video_save_directory)
+if not os.path.exists(report_directory):
+    os.makedirs(report_directory)
 
 
-# Function to calculate distance between two points
+# Function to calculate distance between two points (in pixels)
 def calculate_distance(p1, p2):
     return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
+# Function to calculate robot speed in meters per second
+def calculate_speed(current_position, prev_position, elapsed_time):
+    # Calculate pixel distance
+    pixel_distance = calculate_distance(current_position, prev_position)
+
+    # Convert to meters using pixel-to-meter ratio
+    distance_in_meters = pixel_distance * pixel_to_meter_ratio
+
+    # Speed = distance / time
+    speed = distance_in_meters / elapsed_time if elapsed_time > 0 else 0
+    return speed
+
+
 # Function to process the frame for robot detection (for display purposes only)
 def detect_robot_for_display(frame):
-    global robot_positions
+    global robot_positions, prev_position, distance_covered, start_time
 
     corners, ids = aruco_detector.detect_markers(frame)
     if ids is not None:
@@ -55,6 +74,30 @@ def detect_robot_for_display(frame):
             (0, 255, 255),
             2,
         )
+
+        # Calculate the speed if tracking started
+        if timer_running and prev_position is not None:
+            elapsed_time = time.time() - start_time
+            speed = calculate_speed(current_position, prev_position, elapsed_time)
+            distance_covered += (
+                calculate_distance(current_position, prev_position)
+                * pixel_to_meter_ratio
+            )
+            start_time = time.time()  # Reset start time for the next frame
+
+            # Display speed in meters/second
+            cv2.putText(
+                frame,
+                f"Speed: {speed:.2f} m/s",
+                (x_center + 10, y_center + 30),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (255, 0, 0),
+                2,
+            )
+
+        prev_position = current_position  # Update the previous position
+
     else:
         # Optical flow when no marker is detected
         flow_bgr = optical_flow.calculate_flow(frame)
@@ -93,6 +136,17 @@ def generate_frames():
         )
 
 
+# Function to save the team report
+def save_team_report(team_name, time_taken, distance_covered, avg_speed):
+    report_file = os.path.join(report_directory, f"{team_name}.txt")
+    with open(report_file, "w") as report:
+        report.write(f"Team Name: {team_name}\n")
+        report.write(f"Time Taken: {time_taken:.2f} seconds\n")
+        report.write(f"Distance Covered: {distance_covered:.2f} meters\n")
+        report.write(f"Average Speed: {avg_speed:.2f} m/s\n")
+        report.write(f"Report generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+
 # Route to get team input
 @app.route("/")
 def team_input():
@@ -110,11 +164,13 @@ def start_timer_page():
 # Route to start the system (start timer and recording)
 @app.route("/start_system", methods=["POST"])
 def start_system():
-    global start_time, timer_running, recording, out
+    global start_time, timer_running, recording, out, distance_covered, prev_position
 
     # Start the timer
     start_time = time.time()
     timer_running = True
+    distance_covered = 0  # Reset distance
+    prev_position = None  # Reset previous position
 
     # Start video recording if not already recording
     if not recording:
@@ -135,11 +191,11 @@ def start_system():
 # Route to stop the system (stop timer and recording)
 @app.route("/stop_system", methods=["POST"])
 def stop_system():
-    global timer_running, recording, out
+    global timer_running, recording, out, team_name, distance_covered
 
     # Stop the timer
-    timer_running = False
     elapsed_time = time.time() - start_time if start_time else 0.0
+    timer_running = False
 
     # Stop video recording
     if recording:
@@ -147,6 +203,12 @@ def stop_system():
         if out is not None:
             out.release()
             out = None
+
+    # Calculate average speed
+    avg_speed = distance_covered / elapsed_time if elapsed_time > 0 else 0
+
+    # Save the report for the team
+    save_team_report(team_name, elapsed_time, distance_covered, avg_speed)
 
     return jsonify(status="stopped", time_taken=f"{elapsed_time:.2f} seconds")
 
