@@ -9,8 +9,10 @@ from moving_object import OpticalFlow
 
 app = Flask(__name__)
 
-# Global variables
-cap = cv2.VideoCapture(0)  # Capture video feed from the default camera
+# Global variables for multiple cameras
+cap1 = cv2.VideoCapture(0)  # First webcam
+cap2 = cv2.VideoCapture(1)  # Second webcam
+cap3 = cv2.VideoCapture(2)  # Third webcam
 team_name = None
 timer_running = False
 start_time = None
@@ -109,31 +111,14 @@ def detect_robot_for_display(frame):
     return frame
 
 
-# Function to generate frames for video streaming
-def generate_frames():
-    global recording, out, cap
+# Function to stack frames horizontally or vertically
+def stack_frames(frames, axis=1):
+    return np.concatenate(frames, axis=axis)
 
-    while True:
-        success, frame = cap.read()
-        if not success:
-            break
 
-        raw_frame = frame.copy()  # Capture the raw frame for recording
-
-        # If recording, write the raw frame (without ArUco/Optical flow)
-        if recording and out is not None:
-            out.write(raw_frame)
-
-        # For display purposes, process the frame with ArUco markers and optical flow
-        display_frame = detect_robot_for_display(frame)
-
-        # Encode frame for display
-        ret, buffer = cv2.imencode(".jpg", display_frame)
-        display_frame = buffer.tobytes()
-
-        yield (
-            b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + display_frame + b"\r\n"
-        )
+# Function to resize frames to a consistent size
+def resize_frame(frame, width, height):
+    return cv2.resize(frame, (width, height))
 
 
 # Function to save the team report
@@ -174,18 +159,77 @@ def start_system():
 
     # Start video recording if not already recording
     if not recording:
-        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        target_width = 640  # Assuming the resized frame width
+        target_height = 480  # Assuming the resized frame height
+
+        # Calculate the width for combined frame
+        combined_frame_width = target_width * 3  # 3 cameras horizontally
+        combined_frame_height = target_height  # Height remains the same
+
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # Codec for MP4
         out = cv2.VideoWriter(
             os.path.join(video_save_directory, f"{team_name}_{int(start_time)}.mp4"),
             fourcc,
-            20.0,
-            (frame_width, frame_height),
+            20.0,  # FPS
+            (combined_frame_width, combined_frame_height),  # Combined frame size
         )
         recording = True
 
     return jsonify(status="success")
+
+
+# Function to generate frames for video streaming and recording
+def generate_frames():
+    global recording, out, cap1, cap2, cap3
+
+    target_width = 640
+    target_height = 480
+
+    while True:
+        # Read from each camera
+        success1, frame1 = cap1.read()
+        success2, frame2 = cap2.read()
+        success3, frame3 = cap3.read()
+
+        if not success1 or not success2 or not success3:
+            break
+
+        # Resize all frames to the target size
+        frame1_resized = resize_frame(frame1, target_width, target_height)
+        frame2_resized = resize_frame(frame2, target_width, target_height)
+        frame3_resized = resize_frame(frame3, target_width, target_height)
+
+        # Combine the resized frames horizontally (can change to vertical by using axis=0)
+        combined_frame = stack_frames(
+            [frame1_resized, frame2_resized, frame3_resized], axis=1
+        )
+
+        # Process frames (optional: e.g., ArUco or optical flow can be applied here)
+        display_frame1 = detect_robot_for_display(frame1_resized)
+        display_frame2 = detect_robot_for_display(frame2_resized)
+        display_frame3 = detect_robot_for_display(frame3_resized)
+
+        # Combine processed frames for display
+        combined_display_frame = stack_frames(
+            [display_frame1, display_frame2, display_frame3], axis=1
+        )
+
+        # If recording, write the combined raw frame (without ArUco/Optical flow)
+        if recording and out is not None:
+            try:
+                # Write the combined frame to the video file
+                out.write(combined_frame)
+            except Exception as e:
+                print(f"Error writing to video file: {e}")
+
+        # Encode combined display frame for streaming
+        ret, buffer = cv2.imencode(".jpg", combined_display_frame)
+        combined_display_frame = buffer.tobytes()
+
+        yield (
+            b"--frame\r\n"
+            b"Content-Type: image/jpeg\r\n\r\n" + combined_display_frame + b"\r\n"
+        )
 
 
 # Route to stop the system (stop timer and recording)
