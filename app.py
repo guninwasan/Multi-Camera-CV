@@ -17,13 +17,13 @@ start_time = None
 lock = threading.Lock()
 recording = False  # To track recording status
 out = None  # VideoWriter object
-distance_covered = 0  # Distance in meters
-prev_position = None  # Previous robot position
-pixel_to_meter_ratio = 0.01  # Example ratio: 1 pixel = 0.01 meters (You need to calibrate this for your system)
+distance_covered = 0
+prev_position = None
+pixel_to_meter_ratio = 0.01
 
 aruco_detector = ArucoDetector()
 optical_flow = OpticalFlow()
-robot_positions = []  # Store robot positions
+robot_positions = []
 
 # Directory to store videos and reports
 video_save_directory = os.path.join(os.getcwd(), "videos")
