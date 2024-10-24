@@ -1,6 +1,7 @@
 import cv2
 from flask import Flask, render_template, request, jsonify, Response
 import time
+import os
 import threading
 import numpy as np
 from aruco import ArucoDetector
@@ -14,10 +15,16 @@ team_name = None
 timer_running = False
 start_time = None
 lock = threading.Lock()
+recording = False
+out = None  # VideoWriter object
 
 aruco_detector = ArucoDetector()
 optical_flow = OpticalFlow()
 robot_positions = []  # Store robot positions
+
+video_save_directory = os.path.join(os.getcwd(), "videos")
+if not os.path.exists(video_save_directory):
+    os.makedirs(video_save_directory)
 
 
 # Function to calculate distance between two points
@@ -60,12 +67,18 @@ def detect_robot(frame):
 
 # Function to generate frames for video streaming
 def generate_frames():
+    global recording, out, cap
+
     while True:
         success, frame = cap.read()
         if not success:
             break
 
         frame = detect_robot(frame)
+
+        # If recording, write the frame to the video file
+        if recording and out is not None:
+            out.write(frame)
 
         # Encode frame
         ret, buffer = cv2.imencode(".jpg", frame)
@@ -74,11 +87,13 @@ def generate_frames():
         yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
 
 
+# Route to get team input
 @app.route("/")
 def team_input():
     return render_template("team_input.html")
 
 
+# Route to start the timer page
 @app.route("/start_timer_page", methods=["POST"])
 def start_timer_page():
     global team_name
@@ -86,22 +101,50 @@ def start_timer_page():
     return render_template("timer.html", team_name=team_name)
 
 
+# Route to start the system (start timer and recording)
 @app.route("/start_system", methods=["POST"])
 def start_system():
-    global start_time, timer_running
+    global start_time, timer_running, recording, out
+
+    # Start the timer
     start_time = time.time()
     timer_running = True
+
+    if not recording:
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        out = cv2.VideoWriter(
+            os.path.join(video_save_directory, f"Team-{team_name}_{start_time}.mp4"),
+            fourcc,
+            20.0,
+            (frame_width, frame_height),
+        )
+        recording = True
+
     return jsonify(status="success")
 
 
+# Route to stop the system (stop timer and recording)
 @app.route("/stop_system", methods=["POST"])
 def stop_system():
-    global timer_running, start_time
+    global timer_running, recording, out
+
+    # Stop the timer
     timer_running = False
     elapsed_time = time.time() - start_time if start_time else 0.0
+
+    # Stop video recording
+    if recording:
+        recording = False
+        if out is not None:
+            out.release()
+            out = None
+
     return jsonify(status="stopped", time_taken=f"{elapsed_time:.2f} seconds")
 
 
+# Route to stream the video feed with robot detection
 @app.route("/video_feed")
 def video_feed():
     return Response(
