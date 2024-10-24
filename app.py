@@ -10,18 +10,19 @@ from moving_object import OpticalFlow
 app = Flask(__name__)
 
 # Global variables
-cap = cv2.VideoCapture(0)
+cap = cv2.VideoCapture(0)  # Capture video feed from the default camera
 team_name = None
 timer_running = False
 start_time = None
 lock = threading.Lock()
-recording = False
+recording = False  # To track recording status
 out = None  # VideoWriter object
 
 aruco_detector = ArucoDetector()
 optical_flow = OpticalFlow()
 robot_positions = []  # Store robot positions
 
+# Directory to store videos
 video_save_directory = os.path.join(os.getcwd(), "videos")
 if not os.path.exists(video_save_directory):
     os.makedirs(video_save_directory)
@@ -32,8 +33,8 @@ def calculate_distance(p1, p2):
     return np.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
 
 
-# Function to detect the robot
-def detect_robot(frame):
+# Function to process the frame for robot detection (for display purposes only)
+def detect_robot_for_display(frame):
     global robot_positions
 
     corners, ids = aruco_detector.detect_markers(frame)
@@ -74,17 +75,22 @@ def generate_frames():
         if not success:
             break
 
-        frame = detect_robot(frame)
+        raw_frame = frame.copy()  # Capture the raw frame for recording
 
-        # If recording, write the frame to the video file
+        # If recording, write the raw frame (without ArUco/Optical flow)
         if recording and out is not None:
-            out.write(frame)
+            out.write(raw_frame)
 
-        # Encode frame
-        ret, buffer = cv2.imencode(".jpg", frame)
-        frame = buffer.tobytes()
+        # For display purposes, process the frame with ArUco markers and optical flow
+        display_frame = detect_robot_for_display(frame)
 
-        yield (b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + frame + b"\r\n")
+        # Encode frame for display
+        ret, buffer = cv2.imencode(".jpg", display_frame)
+        display_frame = buffer.tobytes()
+
+        yield (
+            b"--frame\r\n" b"Content-Type: image/jpeg\r\n\r\n" + display_frame + b"\r\n"
+        )
 
 
 # Route to get team input
@@ -110,12 +116,13 @@ def start_system():
     start_time = time.time()
     timer_running = True
 
+    # Start video recording if not already recording
     if not recording:
         frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")  # Codec for MP4
         out = cv2.VideoWriter(
-            os.path.join(video_save_directory, f"Team-{team_name}_{start_time}.mp4"),
+            os.path.join(video_save_directory, f"{team_name}_{int(start_time)}.mp4"),
             fourcc,
             20.0,
             (frame_width, frame_height),
