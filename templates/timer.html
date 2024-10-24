@@ -53,6 +53,9 @@
                 document.getElementById("start-stop-button").textContent =
                   "Stop Timer";
                 document.getElementById("video-feed").style.display = "block";
+                document
+                  .getElementById("start-stop-button")
+                  .classList.add("btn-danger");
                 updateElapsedTime();
               }
             });
