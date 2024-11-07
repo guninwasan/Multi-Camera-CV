@@ -6,6 +6,8 @@ import threading
 import numpy as np
 from aruco import ArucoDetector
 from moving_object import OpticalFlow
+import atexit
+
 
 app = Flask(__name__)
 
@@ -24,6 +26,7 @@ prev_position = None
 pixel_to_meter_ratio = 0.01
 
 aruco_detector = ArucoDetector()
+optical_flow_on = True
 optical_flow = OpticalFlow()
 robot_positions = []
 
@@ -34,6 +37,20 @@ if not os.path.exists(video_save_directory):
     os.makedirs(video_save_directory)
 if not os.path.exists(report_directory):
     os.makedirs(report_directory)
+
+
+def release_resources():
+    global cap1, cap2, cap3
+    if cap1.isOpened():
+        cap1.release()
+    if cap2.isOpened():
+        cap2.release()
+    if cap3.isOpened():
+        cap3.release()
+    print("Cameras released successfully.")
+
+
+atexit.register(release_resources)
 
 
 # Function to calculate distance between two points (in pixels)
@@ -100,12 +117,14 @@ def detect_robot_for_display(frame):
 
         prev_position = current_position  # Update the previous position
 
-    else:
+    elif optical_flow_on:
         # Optical flow when no marker is detected
         flow_bgr = optical_flow.calculate_flow(frame)
         alpha = 0.5  # Transparency factor
         frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
         current_position = robot_positions[-1] if robot_positions else (0, 0)
+    else:
+        current_position = (0, 0)
 
     robot_positions.append((current_position, time.time()))
     return frame
