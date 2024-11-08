@@ -23,7 +23,7 @@ recording = False  # To track recording status
 out = None  # VideoWriter object
 distance_covered = 0
 prev_position = None
-pixel_to_meter_ratio = 0.01
+pixel_to_meter_ratio = 1
 
 aruco_detector = ArucoDetector()
 optical_flow_on = True
@@ -105,15 +105,15 @@ def detect_robot_for_display(frame):
             start_time = time.time()  # Reset start time for the next frame
 
             # Display speed in meters/second
-            cv2.putText(
-                frame,
-                f"Speed: {speed:.2f} m/s",
-                (x_center + 10, y_center + 30),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.9,
-                (255, 0, 0),
-                2,
-            )
+            # cv2.putText(
+            #     frame,
+            #     f"Speed: {speed:.2f} px/s",
+            #     (x_center + 10, y_center + 30),
+            #     cv2.FONT_HERSHEY_SIMPLEX,
+            #     0.9,
+            #     (255, 0, 0),
+            #     2,
+            # )
 
         prev_position = current_position  # Update the previous position
 
@@ -147,7 +147,7 @@ def save_team_report(team_name, time_taken, distance_covered, avg_speed):
         report.write(f"Team Name: {team_name}\n")
         report.write(f"Time Taken: {time_taken:.2f} seconds\n")
         report.write(f"Distance Covered: {distance_covered:.2f} meters\n")
-        report.write(f"Average Speed: {avg_speed:.2f} m/s\n")
+        report.write(f"Average Speed: {avg_speed:.2f} p/s\n")
         report.write(f"Report generated on: {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
         report.write("\n\n")
 
