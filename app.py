@@ -6,8 +6,8 @@ import threading
 import numpy as np
 from aruco import ArucoDetector
 from moving_object import OpticalFlow
+from yolo import YoloDetector
 import atexit
-
 
 app = Flask(__name__)
 
@@ -25,9 +25,16 @@ distance_covered = 0
 prev_position = None
 pixel_to_meter_ratio = 1
 
+# CV Detector Models
+
 aruco_detector = ArucoDetector()
+
 optical_flow_on = True
 optical_flow = OpticalFlow()
+
+yolo_on = True
+yolo_detector = YoloDetector()
+
 robot_positions = []
 
 # Directory to store videos and reports
@@ -125,6 +132,24 @@ def detect_robot_for_display(frame):
         current_position = robot_positions[-1] if robot_positions else (0, 0)
     else:
         current_position = (0, 0)
+
+    # YOLO detection
+    if yolo_on:
+        yolo_detections = yolo_detector.detect(frame)
+        for detection in yolo_detections:
+            x, y, w, h = detection["bbox"]
+            label = detection["label"]
+            confidence = detection["confidence"]
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            cv2.putText(
+                frame,
+                f"{label} ({confidence:.2f})",
+                (x, y - 10),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (0, 255, 0),
+                2,
+            )
 
     robot_positions.append((current_position, time.time()))
     return frame
