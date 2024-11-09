@@ -71,7 +71,6 @@ def calculate_speed(current_position, prev_position, elapsed_time):
     return speed
 
 
-# Function to process the frame for robot detection (for display purposes only)
 def detect_robot_for_display(frame):
     global robot_positions, prev_position, distance_covered, start_time
 
@@ -94,31 +93,17 @@ def detect_robot_for_display(frame):
             2,
         )
 
-        # Calculate the speed if tracking started
         if timer_running and prev_position is not None:
             elapsed_time = time.time() - start_time
-            speed = calculate_speed(current_position, prev_position, elapsed_time)
             distance_covered += (
                 calculate_distance(current_position, prev_position)
                 * pixel_to_meter_ratio
             )
-            start_time = time.time()  # Reset start time for the next frame
+            start_time = time.time()
 
-            # Display speed in meters/second
-            # cv2.putText(
-            #     frame,
-            #     f"Speed: {speed:.2f} px/s",
-            #     (x_center + 10, y_center + 30),
-            #     cv2.FONT_HERSHEY_SIMPLEX,
-            #     0.9,
-            #     (255, 0, 0),
-            #     2,
-            # )
-
-        prev_position = current_position  # Update the previous position
+        prev_position = current_position
 
     elif optical_flow_on:
-        # Optical flow when no marker is detected
         flow_bgr = optical_flow.calculate_flow(frame)
         alpha = 0.5  # Transparency factor
         frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
