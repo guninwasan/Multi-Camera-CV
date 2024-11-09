@@ -7,3 +7,5 @@ score_report.txt
 *.log
 error_report.txt
 .DS_Store
+*.txt
+*.mp4

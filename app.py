@@ -13,8 +13,8 @@ app = Flask(__name__)
 
 # Global variables for multiple cameras
 cap1 = cv2.VideoCapture(0)  # First webcam
-cap2 = cv2.VideoCapture(1)  # Second webcam
-cap3 = cv2.VideoCapture(2)  # Third webcam
+cap2 = cv2.VideoCapture(0)  # Second webcam
+cap3 = cv2.VideoCapture(0)  # Third webcam
 team_name = None
 timer_running = False
 start_time = None
@@ -33,7 +33,7 @@ optical_flow_on = True
 optical_flow = OpticalFlow()
 
 yolo_on = True
-yolo_detector = YoloDetector()
+yolo_detector = YoloDetector(target_class_id=0)
 
 robot_positions = []
 
@@ -88,8 +88,6 @@ def detect_robot_for_display(frame):
         x_center = int(c[:, 0].mean())
         y_center = int(c[:, 1].mean())
         current_position = (x_center, y_center)
-
-        # Draw circle and display position
         cv2.circle(frame, current_position, 5, (0, 255, 0), -1)
         cv2.putText(
             frame,
@@ -101,7 +99,6 @@ def detect_robot_for_display(frame):
             2,
         )
 
-        # Calculate the speed if tracking started
         if timer_running and prev_position is not None:
             elapsed_time = time.time() - start_time
             speed = calculate_speed(current_position, prev_position, elapsed_time)
@@ -111,7 +108,6 @@ def detect_robot_for_display(frame):
             )
             start_time = time.time()  # Reset start time for the next frame
 
-            # Display speed in meters/second
             cv2.putText(
                 frame,
                 f"Speed: {speed:.2f} m/s",
@@ -122,32 +118,30 @@ def detect_robot_for_display(frame):
                 2,
             )
 
-        prev_position = current_position  # Update the previous position
+        prev_position = current_position
 
+    # Optical flow if no ArUco markers are detected
     elif optical_flow_on:
-        # Optical flow when no marker is detected
         flow_bgr = optical_flow.calculate_flow(frame)
-        alpha = 0.5  # Transparency factor
-        frame = cv2.addWeighted(flow_bgr, alpha, frame, 1 - alpha, 0)
+        frame = cv2.addWeighted(flow_bgr, 0.5, frame, 0.5, 0)
         current_position = robot_positions[-1] if robot_positions else (0, 0)
     else:
         current_position = (0, 0)
 
     # YOLO detection
     if yolo_on:
-        yolo_detections = yolo_detector.detect(frame)
-        for detection in yolo_detections:
-            x, y, w, h = detection["bbox"]
-            label = detection["label"]
-            confidence = detection["confidence"]
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        frame, boxes = yolo_detector.detect_objects(frame)
+        for box in boxes:
+            x1, y1, x2, y2 = box["coordinates"]
+            confidence = box["confidence"]
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 0, 255), 2)
             cv2.putText(
                 frame,
-                f"{label} ({confidence:.2f})",
-                (x, y - 10),
+                f"Person {confidence:.2f}",
+                (x1, y1 - 10),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.9,
-                (0, 255, 0),
+                0.6,
+                (0, 0, 255),
                 2,
             )
 
